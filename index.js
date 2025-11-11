@@ -20,14 +20,14 @@ const client = new Client({
     partials: [Partials.Channel]
 });
 
-const OWNER_ID = 'YOUR_DISCORD_USER_ID';
+const OWNER_ID = '1418613878052360345';
 
 // In-memory storage
 const userStatus = new Map();
 const userPoints = new Map();
 const activeGames = new Map();
 const pollEmojis = ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭','🇮','🇯'];
-const triggerWords = { hello: '👋', gg: '🏆', wow: '😮', lol: '😂' };
+const triggerWords = { hello: '😘', wow: '😮', lol: '😂' };
 
 // =====================================
 // ✅ Bot Ready
@@ -179,6 +179,196 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [embed] });
         return;
     }
+    // =====================================
+    // 🎮 Tic-Tac-Toe Game
+    // =====================================
+    if (content.toLowerCase().startsWith('!tictactoe')) {
+        const opponent = message.mentions.users.first();
+        if (!opponent) return message.reply('❌ Please mention a user to play with!');
+        if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
+        if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
+
+        const gameId = `${message.author.id}-${opponent.id}`;
+        if (activeGames.has(gameId)) return message.reply('⚠️ You already have an ongoing game with this user.');
+
+        // Game setup
+        const board = Array(9).fill(null);
+        const currentPlayer = message.author;
+        activeGames.set(gameId, { board, currentPlayer, player1: message.author, player2: opponent });
+
+        const embed = new EmbedBuilder()
+            .setTitle('🎮 Tic-Tac-Toe')
+            .setDescription(renderBoard(board))
+            .setColor(0x00ff99)
+            .setFooter({ text: `Turn: ${currentPlayer.username}` });
+
+        const gameMsg = await message.channel.send({ embeds: [embed] });
+        const emojiNums = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+        for (const e of emojiNums) await gameMsg.react(e);
+
+        const filter = (reaction, user) => emojiNums.includes(reaction.emoji.name) && !user.bot;
+        const collector = gameMsg.createReactionCollector({ filter, time: 120000 });
+
+        collector.on('collect', async (reaction, user) => {
+            const game = activeGames.get(gameId);
+            if (!game || user.id !== game.currentPlayer.id) return reaction.users.remove(user);
+
+            const index = emojiNums.indexOf(reaction.emoji.name);
+            if (game.board[index]) return reaction.users.remove(user);
+
+            const mark = user.id === game.player1.id ? '❌' : '⭕';
+            game.board[index] = mark;
+
+            // Check result
+            const winner = checkWinner(game.board);
+            if (winner) {
+                collector.stop('win');
+                updatePoints(user.id, 3);
+                updatePoints(game.player1.id === user.id ? game.player2.id : game.player1.id, 0);
+
+                const winEmbed = new EmbedBuilder()
+                    .setTitle(`🏆 ${user.username} Wins!`)
+                    .setDescription(`${renderBoard(game.board)}\n\n+3 points awarded!`)
+                    .setColor(0xFFD700)
+                    .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif') // 🎉 Custom winner GIF
+                    .setFooter({ text: 'Tic-Tac-Toe Champion!' })
+                    .setTimestamp();
+
+                return gameMsg.edit({ embeds: [winEmbed] });
+            }
+
+            if (game.board.every(cell => cell)) {
+                collector.stop('draw');
+                updatePoints(game.player1.id, 1);
+                updatePoints(game.player2.id, 1);
+
+                const drawEmbed = new EmbedBuilder()
+                    .setTitle('🤝 Draw!')
+                    .setDescription(`${renderBoard(game.board)}\n\nBoth players get +1 point.`)
+                    .setColor(0x7289da)
+                    .setTimestamp();
+
+                return gameMsg.edit({ embeds: [drawEmbed] });
+            }
+
+            game.currentPlayer = game.currentPlayer.id === game.player1.id ? game.player2 : game.player1;
+            const newEmbed = new EmbedBuilder()
+                .setTitle('🎮 Tic-Tac-Toe')
+                .setDescription(renderBoard(game.board))
+                .setColor(0x00ff99)
+                .setFooter({ text: `Turn: ${game.currentPlayer.username}` });
+            gameMsg.edit({ embeds: [newEmbed] });
+        });
+
+        collector.on('end', (_, reason) => {
+            activeGames.delete(gameId);
+            if (reason === 'time') {
+                message.channel.send('⌛ Game ended due to inactivity.');
+            }
+        });
+        return;
+    }
+    // ==========================
+    // USER INFO COMMAND
+    // ==========================
+    if (content.startsWith('!userinfo')) {
+        const member = message.mentions.members.first() || message.member;
+        const user = member.user;
+        const embed = new EmbedBuilder()
+            .setTitle(`${user.username}'s Info`)
+            .setThumbnail(user.displayAvatarURL())
+            .addFields(
+                { name: 'Display Name', value: member.displayName, inline: true },
+                { name: 'Username', value: user.tag, inline: true },
+                { name: 'User ID', value: user.id, inline: true },
+                { name: 'Roles', value: `${member.roles.cache.size - 1}`, inline: true },
+                { name: 'Joined Server', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:F>`, inline: true },
+                { name: 'Account Created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:F>`, inline: true },
+            )
+            .setColor(0x2b2d31);
+        return message.reply({ embeds: [embed] });
+    }
+    // ==========================
+    // AFK COMMAND
+    // ==========================
+    if (content.startsWith('!afk')) {
+        const msg = content.slice(4).trim() || 'I am currently AFK.';
+        userStatus.set(message.author.id, { type: 'afk', message: msg, time: Date.now() });
+        return message.reply(`💤 You are now AFK: "${msg}"`);
+    }
+
+    // ==========================
+    // DND COMMAND
+    // ==========================
+    if (content.startsWith('!dnd')) {
+        const msg = content.slice(4).trim() || 'Do not disturb.';
+        userStatus.set(message.author.id, { type: 'dnd', message: msg, time: Date.now() });
+        return message.reply(`⛔ You are now in DND mode: "${msg}"`);
+    }
+
+    // ==========================
+    // POLL COMMAND
+    // ==========================
+    if (content.startsWith('!poll')) {
+        const args = content.match(/"([^"]+)"|[^\s]+/g);
+        if (!args || args.length < 3)
+            return message.reply('❌ Usage: `!poll "Question" Option1 Option2 ...`');
+        const question = args[0].replace(/"/g, '');
+        const options = args.slice(1);
+        const desc = options.map((opt, i) => `${pollEmojis[i]} — ${opt}`).join('\n');
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 ${question}`)
+            .setDescription(desc)
+            .setColor(0x3498db);
+        const pollMsg = await message.channel.send({ embeds: [embed] });
+        for (let i = 0; i < options.length; i++) await pollMsg.react(pollEmojis[i]);
+        return;
+    }
+
+    // ==========================
+    // REMOVE AFK/DND ON MESSAGE
+    // ==========================
+    if (userStatus.has(message.author.id)) {
+        const prev = userStatus.get(message.author.id);
+        userStatus.delete(message.author.id);
+        return message.reply(`👋 Welcome back! You are no longer ${prev.type.toUpperCase()}.`);
+    }
+
+    // ==========================
+    // NOTIFY WHEN TAGGING AFK/DND
+    // ==========================
+    if (message.mentions.users.size > 0) {
+        for (const user of message.mentions.users.values()) {
+            if (userStatus.has(user.id)) {
+                const s = userStatus.get(user.id);
+                const mins = Math.floor((Date.now() - s.time) / 60000);
+                await message.reply(
+                    `${s.type === 'afk' ? '💤' : '⛔'} ${user.username} is ${s.type.toUpperCase()}: "${s.message}" (${mins}m)`
+                );
+            }
+        }
+    }
+// ==========================
+    // AVATAR COMMAND
+    // ==========================
+    if (content.startsWith('!avatar')) {
+        const args = content.split(' ').slice(1);
+        let user = message.mentions.users.first();
+        if (!user && args[0]) {
+            try {
+                user = await client.users.fetch(args[0]);
+            } catch {
+                user = message.author;
+            }
+        } else if (!user) user = message.author;
+
+        const embed = new EmbedBuilder()
+            .setTitle(`${user.username}'s Avatar`)
+            .setImage(user.displayAvatarURL({ size: 1024, dynamic: true }))
+            .setColor(0x5865f2);
+        return message.reply({ embeds: [embed] });
+    }
+
 
     // =====================================
     // ⚙️ Other commands (AFK, DND, Avatar, Tic-Tac-Toe, etc.)
