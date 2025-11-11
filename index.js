@@ -95,13 +95,13 @@ client.on('messageCreate', async (message) => {
         .setDescription('Here’s what I can do!')
         .addFields(
             //{ name: '🏓 !ping', value: 'Check bot response speed.' },
-            { name: '💤 !afk [msg]', value: 'Set AFK message.' },
-            { name: '⛔ !dnd [msg]', value: 'Set Do Not Disturb mode.' },
-            { name: '🖼️ !avatar [@user]', value: 'Show user avatar.' },
-            { name: '📜 !userinfo [@user]', value: 'Show user info.' },
-            { name: '📊 !poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
-            { name: '🎮 !tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
-            { name: '⚙️ !warn / !timeout / !ban', value: 'Moderation commands for staff.' },
+            { name: '💤 +afk [msg]', value: 'Set AFK message.' },
+            { name: '⛔ +dnd [msg]', value: 'Set Do Not Disturb mode.' },
+            { name: '🖼️ +av [@user]', value: 'Show user avatar.' },
+            { name: '📜 +user [@user]', value: 'Show user info.' },
+            { name: '📊 +poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
+            { name: '🎮 +tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
+            { name: '⚙️ +warn / !timeout / !ban', value: 'Moderation commands for staff.' },
             { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
         )
         .addFields({ name: 'Created and Managed', value: 'Created by **BLYTZ** 💻' }) // <-- added creator name
