@@ -40,29 +40,41 @@ client.once('ready', () => {
 // 📩 Message Event
 // =====================================
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+    if (message.author.bot) return; // Ignore bot messages
+
     const content = message.content.trim();
 
     // =====================================
     // 🐞 Bug Report via DM
     // =====================================
-    if (message.channel.type === 1) {
+    if (message.channel.type === 1) { // Check if it's a DM
         try {
+            const OWNER_ID = '1418613878052360345'; // Replace with your owner's actual ID
             const owner = await client.users.fetch(OWNER_ID);
+            
             const reportEmbed = new EmbedBuilder()
                 .setTitle('🐞 Bug / Glitch Report Received')
                 .setColor(0xff0000)
                 .setDescription(`**From:** ${message.author.tag} (${message.author.id})\n**Message:** ${content}`)
                 .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
                 .setTimestamp();
+
             await owner.send({ embeds: [reportEmbed] });
             await message.reply('✅ Your report has been sent to the bot owner. Thank you!');
         } catch (err) {
-            console.error(err);
+            console.error('Error sending report:', err);
             await message.reply('⚠️ Error sending your report.');
         }
-        return;
+        return; // End here for DMs 
     }
+
+    // Additional commands handling, e.g., tictactoe check:
+    if (content === '!tictactoe') {
+        // Place your tic tac toe command implementation here
+        await message.reply('TicTacToe command recognized!');
+    }
+});
+
 
     // =====================================
     // 🔤 React on Specific Words
