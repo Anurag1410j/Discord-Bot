@@ -5,7 +5,8 @@ const {
     GatewayIntentBits,
     EmbedBuilder,
     PermissionsBitField,
-    Partials
+    Partials,
+    ChannelType
 } = require('discord.js');
 
 const client = new Client({
@@ -47,9 +48,8 @@ client.on('messageCreate', async (message) => {
     // =====================================
     // 🐞 Bug Report via DM
     // =====================================
-    if (message.channel.type === 1) { // Check if it's a DM
+    if (message.channel.type === ChannelType.DM) {
         try {
-            const OWNER_ID = '1418613878052360345'; // Replace with your owner's actual ID
             const owner = await client.users.fetch(OWNER_ID);
             
             const reportEmbed = new EmbedBuilder()
@@ -68,14 +68,6 @@ client.on('messageCreate', async (message) => {
         return; // End here for DMs 
     }
 
-    // Additional commands handling, e.g., tictactoe check:
-    if (content === '!tictactoe') {
-        // Place your tic tac toe command implementation here
-        await message.reply('TicTacToe command recognized!');
-    }
-});
-
-
     // =====================================
     // 🔤 React on Specific Words
     // =====================================
@@ -89,26 +81,25 @@ client.on('messageCreate', async (message) => {
     // 🆘 Help Command
     // =====================================
     if (content.toLowerCase() === '+help') {
-         const helpEmbed = new EmbedBuilder()
-        .setTitle('🤖 Bot Command Menu')
-        .setColor(0x00aaff)
-        .setDescription('Here’s what I can do!')
-        .addFields(
-            //{ name: '🏓 !ping', value: 'Check bot response speed.' },
-            { name: '💤 +afk [msg]', value: 'Set AFK message.' },
-            { name: '⛔ +dnd [msg]', value: 'Set Do Not Disturb mode.' },
-            { name: '🖼️ +av [@user]', value: 'Show user avatar.' },
-            { name: '📜 +user [@user]', value: 'Show user info.' },
-            { name: '📊 +poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
-            { name: '🎮 +tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
-            { name: '⚙️ +warn / !timeout / !ban', value: 'Moderation commands for staff.' },
-            { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
-        )
-        .addFields({ name: 'Created and Managed', value: 'Created by **BLYTZ** 💻' }) // <-- added creator name
-        .setFooter({ text: 'More features coming soon!' })
-        .setTimestamp();
+        const helpEmbed = new EmbedBuilder()
+            .setTitle('🤖 Bot Command Menu')
+            .setColor(0x00aaff)
+            .setDescription('Here’s what I can do!')
+            .addFields(
+                { name: '💤 +afk [msg]', value: 'Set AFK message.' },
+                { name: '⛔ +dnd [msg]', value: 'Set Do Not Disturb mode.' },
+                { name: '🖼️ +av [@user]', value: 'Show user avatar.' },
+                { name: '📜 +user [@user]', value: 'Show user info.' },
+                { name: '📊 +poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
+                { name: '🎮 +tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
+                { name: '⚙️ +warn / +timeout / +ban', value: 'Moderation commands for staff.' },
+                { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
+            )
+            .addFields({ name: 'Created and Managed', value: 'Created by **BLYTZ** 💻' })
+            .setFooter({ text: 'More features coming soon!' })
+            .setTimestamp();
 
-    return message.reply({ embeds: [helpEmbed] });
+        return message.reply({ embeds: [helpEmbed] });
     }
 
     // =====================================
@@ -191,6 +182,7 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [embed] });
         return;
     }
+
     // =====================================
     // 🎮 Tic-Tac-Toe Game
     // =====================================
@@ -203,7 +195,6 @@ client.on('messageCreate', async (message) => {
         const gameId = `${message.author.id}-${opponent.id}`;
         if (activeGames.has(gameId)) return message.reply('⚠️ You already have an ongoing game with this user.');
 
-        // Game setup
         const board = Array(9).fill(null);
         const currentPlayer = message.author;
         activeGames.set(gameId, { board, currentPlayer, player1: message.author, player2: opponent });
@@ -231,7 +222,6 @@ client.on('messageCreate', async (message) => {
             const mark = user.id === game.player1.id ? '❌' : '⭕';
             game.board[index] = mark;
 
-            // Check result
             const winner = checkWinner(game.board);
             if (winner) {
                 collector.stop('win');
@@ -242,7 +232,7 @@ client.on('messageCreate', async (message) => {
                     .setTitle(`🏆 ${user.username} Wins!`)
                     .setDescription(`${renderBoard(game.board)}\n\n+3 points awarded!`)
                     .setColor(0xFFD700)
-                    .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif') // 🎉 Custom winner GIF
+                    .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif')
                     .setFooter({ text: 'Tic-Tac-Toe Champion!' })
                     .setTimestamp();
 
@@ -280,6 +270,7 @@ client.on('messageCreate', async (message) => {
         });
         return;
     }
+
     // ==========================
     // USER INFO COMMAND
     // ==========================
@@ -300,8 +291,9 @@ client.on('messageCreate', async (message) => {
             .setColor(0x2b2d31);
         return message.reply({ embeds: [embed] });
     }
+
     // ==========================
-    // AFK COMMAND
+    // AFK / DND COMMANDS
     // ==========================
     if (content.startsWith('+afk')) {
         const msg = content.slice(4).trim() || 'I am currently AFK.';
@@ -309,9 +301,6 @@ client.on('messageCreate', async (message) => {
         return message.reply(`💤 You are now AFK: "${msg}"`);
     }
 
-    // ==========================
-    // DND COMMAND
-    // ==========================
     if (content.startsWith('+dnd')) {
         const msg = content.slice(4).trim() || 'Do not disturb.';
         userStatus.set(message.author.id, { type: 'dnd', message: msg, time: Date.now() });
@@ -347,7 +336,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================
-    // NOTIFY WHEN TAGGING AFK/DND
+    // NOTIFY WHEN TAGGING AFK/DND USERS
     // ==========================
     if (message.mentions.users.size > 0) {
         for (const user of message.mentions.users.values()) {
@@ -360,7 +349,8 @@ client.on('messageCreate', async (message) => {
             }
         }
     }
-// ==========================
+
+    // ==========================
     // AVATAR COMMAND
     // ==========================
     if (content.startsWith('+av')) {
@@ -380,21 +370,38 @@ client.on('messageCreate', async (message) => {
             .setColor(0x5865f2);
         return message.reply({ embeds: [embed] });
     }
-
-
-    // =====================================
-    // ⚙️ Other commands (AFK, DND, Avatar, Tic-Tac-Toe, etc.)
-    // =====================================
-    // All previous features remain unchanged below.
 });
 
 // =====================================
-// 🏓 Ping
+// 🧩 Helper Functions
 // =====================================
-//client.on('messageCreate', async message => {
-//    if (message.content.toLowerCase() === '!ping' && !message.author.bot)
-       // message.reply('🏓 Pong!');
-//});
+function renderBoard(board) {
+    return `
+${board[0] || '⬜'}${board[1] || '⬜'}${board[2] || '⬜'}
+${board[3] || '⬜'}${board[4] || '⬜'}${board[5] || '⬜'}
+${board[6] || '⬜'}${board[7] || '⬜'}${board[8] || '⬜'}
+    `;
+}
 
+function checkWinner(board) {
+    const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ];
+    for (const [a,b,c] of wins)
+        if (board[a] && board[a] === board[b] && board[a] === board[c])
+            return board[a];
+    return null;
+}
+
+function updatePoints(userId, points) {
+    const prev = userPoints.get(userId) || 0;
+    userPoints.set(userId, prev + points);
+}
+
+// =====================================
+// 🚀 Start the Bot
+// =====================================
 client.login(process.env.DISCORD_TOKEN)
     .catch(err => console.error('❌ Login failed:', err.message));
