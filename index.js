@@ -176,7 +176,7 @@ client.on('messageCreate', async (message) => {
 
         const target = message.mentions.members.first();
         const reason = content.split(' ').slice(2).join(' ') || 'No reason provided';
-        if (+target) return message.reply('⚠️ Please mention a member to ban.');
+        if (!target) return message.reply('⚠️ Please mention a member to ban.');
 
         try {
             await target.send(`🔨 You have been **banned** from **${message.guild.name}**.\nReason: ${reason}`);
@@ -323,7 +323,7 @@ client.on('messageCreate', async (message) => {
     // ==========================
     if (content.startsWith('+poll')) {
         const args = content.match(/"([^"]+)"|[^\s]+/g);
-        if (+args || args.length < 3)
+        if (!args || args.length < 3)
             return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
         const question = args[0].replace(/"/g, '');
         const options = args.slice(1);
