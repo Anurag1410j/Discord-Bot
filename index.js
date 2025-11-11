@@ -48,7 +48,7 @@ client.on('messageCreate', async (message) => {
     // =====================================
     if (message.channel.type === 1) {
         try {
-            const owner = await client.users.fetch(1418613878052360345);
+            const owner = await client.users.fetch(OWNER_ID);
             const reportEmbed = new EmbedBuilder()
                 .setTitle('🐞 Bug / Glitch Report Received')
                 .setColor(0xff0000)
