@@ -164,7 +164,7 @@ client.on('messageCreate', async (message) => {
 
         const target = message.mentions.members.first();
         const reason = content.split(' ').slice(2).join(' ') || 'No reason provided';
-        if (!target) return message.reply('⚠️ Please mention a member to ban.');
+        if (+target) return message.reply('⚠️ Please mention a member to ban.');
 
         try {
             await target.send(`🔨 You have been **banned** from **${message.guild.name}**.\nReason: ${reason}`);
@@ -182,7 +182,7 @@ client.on('messageCreate', async (message) => {
     // =====================================
     // 🎮 Tic-Tac-Toe Game
     // =====================================
-    if (content.toLowerCase().startsWith('!tictactoe')) {
+    if (content.toLowerCase().startsWith('+tictactoe')) {
         const opponent = message.mentions.users.first();
         if (!opponent) return message.reply('❌ Please mention a user to play with!');
         if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
@@ -271,7 +271,7 @@ client.on('messageCreate', async (message) => {
     // ==========================
     // USER INFO COMMAND
     // ==========================
-    if (content.startsWith('!userinfo')) {
+    if (content.startsWith('+user')) {
         const member = message.mentions.members.first() || message.member;
         const user = member.user;
         const embed = new EmbedBuilder()
@@ -291,7 +291,7 @@ client.on('messageCreate', async (message) => {
     // ==========================
     // AFK COMMAND
     // ==========================
-    if (content.startsWith('!afk')) {
+    if (content.startsWith('+afk')) {
         const msg = content.slice(4).trim() || 'I am currently AFK.';
         userStatus.set(message.author.id, { type: 'afk', message: msg, time: Date.now() });
         return message.reply(`💤 You are now AFK: "${msg}"`);
@@ -300,7 +300,7 @@ client.on('messageCreate', async (message) => {
     // ==========================
     // DND COMMAND
     // ==========================
-    if (content.startsWith('!dnd')) {
+    if (content.startsWith('+dnd')) {
         const msg = content.slice(4).trim() || 'Do not disturb.';
         userStatus.set(message.author.id, { type: 'dnd', message: msg, time: Date.now() });
         return message.reply(`⛔ You are now in DND mode: "${msg}"`);
@@ -309,10 +309,10 @@ client.on('messageCreate', async (message) => {
     // ==========================
     // POLL COMMAND
     // ==========================
-    if (content.startsWith('!poll')) {
+    if (content.startsWith('+poll')) {
         const args = content.match(/"([^"]+)"|[^\s]+/g);
-        if (!args || args.length < 3)
-            return message.reply('❌ Usage: `!poll "Question" Option1 Option2 ...`');
+        if (+args || args.length < 3)
+            return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
         const question = args[0].replace(/"/g, '');
         const options = args.slice(1);
         const desc = options.map((opt, i) => `${pollEmojis[i]} — ${opt}`).join('\n');
@@ -351,7 +351,7 @@ client.on('messageCreate', async (message) => {
 // ==========================
     // AVATAR COMMAND
     // ==========================
-    if (content.startsWith('!avatar')) {
+    if (content.startsWith('+av')) {
         const args = content.split(' ').slice(1);
         let user = message.mentions.users.first();
         if (!user && args[0]) {
