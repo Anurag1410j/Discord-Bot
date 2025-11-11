@@ -82,20 +82,21 @@ client.on('messageCreate', async (message) => {
     // =====================================
     if (content.toLowerCase() === '+help') {
         const helpEmbed = new EmbedBuilder()
-            .setTitle('🤖 Bot Command Menu')
+            .setTitle('😉Rizz Help Menu')
             .setColor(0x00aaff)
             .setDescription('Here’s what I can do!')
             .addFields(
-                { name: '💤 +afk [msg]', value: 'Set AFK message.' },
-                { name: '⛔ +dnd [msg]', value: 'Set Do Not Disturb mode.' },
-                { name: '🖼️ +av [@user]', value: 'Show user avatar.' },
-                { name: '📜 +user [@user]', value: 'Show user info.' },
-                { name: '📊 +poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
-                { name: '🎮 +tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
-                { name: '⚙️ +warn / +timeout / +ban', value: 'Moderation commands for staff.' },
-                { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
+                { name: '*Set AFK message*', value: '💤 +afk [msg]' },
+                { name: '*Set Do Not Disturb mode*', value:'⛔ +dnd [msg]'  },
+                { name: '*Show user avatar*', value: '🖼️ +av [@user]' },
+                { name: '*Show user info*', value: '📜 +user [@user]' },
+                { name:  '*Create a poll with up to 10 options*', value: '📊 +poll "Question" Option1 Option2...' },
+                { name:  '*Play Tic-Tac-Toe with points!*',value: '🎮 +tictactoe @user'},
+                { name: '*🛡️Moderation commands for staff*', value: 'Hidden commands reserved for moderators only.' },
+                { name: '*Report bugs directly to the owner*', value: '🐞 DM me' },
+                { name: '*HELP Command*', value: '❓+help' }
             )
-            .addFields({ name: 'Created and Managed', value: 'Created by **BLYTZ** 💻' })
+            .addFields({ name: 'Created by **BLYTZ** ', value: 'Creator and Manager' })
             .setFooter({ text: 'More features coming soon!' })
             .setTimestamp();
 
