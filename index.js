@@ -394,7 +394,7 @@ client.on('messageCreate', async (message) => {
 //client.on('messageCreate', async message => {
 //    if (message.content.toLowerCase() === '!ping' && !message.author.bot)
        // message.reply('🏓 Pong!');
-});
+//});
 
 client.login(process.env.DISCORD_TOKEN)
     .catch(err => console.error('❌ Login failed:', err.message));
