@@ -92,7 +92,7 @@ client.on('messageCreate', async (message) => {
             { name: '⚙️ !warn / !timeout / !ban', value: 'Moderation commands for staff.' },
             { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
         )
-        .addFields({ name: '👑 Bot Creator', value: 'Created by **Anurag** 💻' }) // <-- added creator name
+        .addFields({ name: 'Created and Managed', value: 'Created by **BLYTZ** 💻' }) // <-- added creator name
         .setFooter({ text: 'More features coming soon!' })
         .setTimestamp();
 
