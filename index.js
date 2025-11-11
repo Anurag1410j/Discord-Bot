@@ -48,7 +48,7 @@ client.on('messageCreate', async (message) => {
     // =====================================
     if (message.channel.type === 1) {
         try {
-            const owner = await client.users.fetch(OWNER_ID);
+            const owner = await client.users.fetch(1418613878052360345);
             const reportEmbed = new EmbedBuilder()
                 .setTitle('🐞 Bug / Glitch Report Received')
                 .setColor(0xff0000)
@@ -76,31 +76,33 @@ client.on('messageCreate', async (message) => {
     // =====================================
     // 🆘 Help Command
     // =====================================
-    if (content.toLowerCase() === '!help') {
-        const helpEmbed = new EmbedBuilder()
-            .setTitle('🤖 Bot Command Menu')
-            .setColor(0x00aaff)
-            .setDescription('Here’s what I can do!')
-            .addFields(
-                { name: '🏓 !ping', value: 'Check bot response speed.' },
-                { name: '💤 !afk [msg]', value: 'Set AFK message.' },
-                { name: '⛔ !dnd [msg]', value: 'Set Do Not Disturb mode.' },
-                { name: '🖼️ !avatar [@user]', value: 'Show user avatar.' },
-                { name: '📜 !userinfo [@user]', value: 'Show user info.' },
-                { name: '📊 !poll "Q" Opt1 Opt2...', value: 'Create a poll.' },
-                { name: '🎮 !tictactoe @user', value: 'Play Tic-Tac-Toe!' },
-                { name: '⚙️ !warn / !timeout / !ban', value: 'Moderation commands.' },
-                { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
-            )
-            .setFooter({ text: 'More features coming soon!' })
-            .setTimestamp();
-        return message.reply({ embeds: [helpEmbed] });
+    if (content.toLowerCase() === '+help') {
+         const helpEmbed = new EmbedBuilder()
+        .setTitle('🤖 Bot Command Menu')
+        .setColor(0x00aaff)
+        .setDescription('Here’s what I can do!')
+        .addFields(
+            //{ name: '🏓 !ping', value: 'Check bot response speed.' },
+            { name: '💤 !afk [msg]', value: 'Set AFK message.' },
+            { name: '⛔ !dnd [msg]', value: 'Set Do Not Disturb mode.' },
+            { name: '🖼️ !avatar [@user]', value: 'Show user avatar.' },
+            { name: '📜 !userinfo [@user]', value: 'Show user info.' },
+            { name: '📊 !poll "Question" Option1 Option2...', value: 'Create a poll with up to 10 options.' },
+            { name: '🎮 !tictactoe @user', value: 'Play Tic-Tac-Toe with points!' },
+            { name: '⚙️ !warn / !timeout / !ban', value: 'Moderation commands for staff.' },
+            { name: '🐞 DM me', value: 'Report bugs directly to the owner.' }
+        )
+        .addFields({ name: '👑 Bot Creator', value: 'Created by **Anurag** 💻' }) // <-- added creator name
+        .setFooter({ text: 'More features coming soon!' })
+        .setTimestamp();
+
+    return message.reply({ embeds: [helpEmbed] });
     }
 
     // =====================================
     // ⚠️ WARN Command
     // =====================================
-    if (content.toLowerCase().startsWith('!warn')) {
+    if (content.toLowerCase().startsWith('+warn')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
             return message.reply('❌ You need `Manage Messages` permission to use this.');
 
@@ -124,7 +126,7 @@ client.on('messageCreate', async (message) => {
     // =====================================
     // ⏳ TIMEOUT Command
     // =====================================
-    if (content.toLowerCase().startsWith('!timeout')) {
+    if (content.toLowerCase().startsWith('+timeout')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
             return message.reply('❌ You need `Moderate Members` permission.');
 
@@ -156,7 +158,7 @@ client.on('messageCreate', async (message) => {
     // =====================================
     // 🔨 BAN Command
     // =====================================
-    if (content.toLowerCase().startsWith('!ban')) {
+    if (content.toLowerCase().startsWith('+ban')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers))
             return message.reply('❌ You need `Ban Members` permission.');
 
@@ -187,9 +189,9 @@ client.on('messageCreate', async (message) => {
 // =====================================
 // 🏓 Ping
 // =====================================
-client.on('messageCreate', async message => {
-    if (message.content.toLowerCase() === '!ping' && !message.author.bot)
-        message.reply('🏓 Pong!');
+//client.on('messageCreate', async message => {
+//    if (message.content.toLowerCase() === '!ping' && !message.author.bot)
+       // message.reply('🏓 Pong!');
 });
 
 client.login(process.env.DISCORD_TOKEN)
