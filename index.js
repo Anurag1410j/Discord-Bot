@@ -465,6 +465,11 @@ client.on('messageCreate', async (message) => {
   if (content.startsWith('+poll')) {
     const cooldownLeft = isOnCooldown('+poll', message.author.id);
     if (cooldownLeft) return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
+      
+.setColor(0xFFD700)
+          .setImage('https://usagif.com/wp-content/uploads/gify/all-might-toshinori-yagi-showing-off-muscles-usagif.gif')
+          .setFooter({ text: 'Tic-Tac-Toe Champion!' })
+          .setTimestamp();
 
     const args = content.match(/"([^"]+)"|[^\s]+/g);
     if (!args || args.length < 3)
