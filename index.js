@@ -478,30 +478,35 @@ if (content.startsWith('+poll')) {
   if (options.length > pollEmojis.length)
     return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
 
-  // Description formatting
+  // Format description
   const desc = options
     .map((opt, i) => `${pollEmojis[i]} — ${opt}`)
     .join('\n');
 
-  // Create embed
+  // Create embed with GIF → Question → Options
   const embed = new EmbedBuilder()
     .setTitle(`📊 Poll Started!`)
     .setDescription(`**${question}**\n\n${desc}`)
-    .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif')
+    .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif') // GIF first
     .setColor(0xFFD700)
     .setFooter({ text: `Poll created by ${message.author.username}` })
     .setTimestamp();
 
-  // Send poll message
+  // Send poll
   const pollMsg = await message.channel.send({ embeds: [embed] });
 
   // Add reactions
   for (let i = 0; i < options.length; i++) {
-    try { await pollMsg.react(pollEmojis[i]); } catch (err) {}
+    try { 
+      await pollMsg.react(pollEmojis[i]); 
+    } catch (err) {
+      console.log("Reaction Error:", err);
+    }
   }
 
   return;
 }
+
 
   // ==========================
   // REMOVE AFK/DND ON MESSAGE
