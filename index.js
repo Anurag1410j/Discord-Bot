@@ -54,26 +54,18 @@ const tttStats = {}; // key: userId -> { wins, losses, draws, games, points }
 // =====================================
 // ✅ Bot Ready
 // =====================================
-client.once('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+  if (!message.content) return;
 
-// =====================================
-// Helper: check and enforce cooldown
-// =====================================
-function isOnCooldown(command, userId) {
-  const secs = commandCooldowns[command];
-  if (!secs) return false;
-  if (!cooldowns.has(command)) cooldowns.set(command, new Map());
-  const map = cooldowns.get(command);
-  const now = Date.now();
-  if (map.has(userId)) {
-    const expires = map.get(userId);
-    if (now < expires) return Math.ceil((expires - now) / 1000);
-  }
-  map.set(userId, now + secs * 1000);
-  return false;
-}
+  // Prevent duplicate execution
+  if (processedMessages.has(message.id)) return;
+  processedMessages.add(message.id);
+  setTimeout(() => processedMessages.delete(message.id), 300000);
+
+  const raw = message.content;
+  const content = raw.trim();
+  const lc = content.toLowerCase();
 
 // =====================================
 // 📩 Message Event
