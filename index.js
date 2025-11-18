@@ -185,92 +185,210 @@ client.on('messageCreate', async (message) => {
     }
 
     // =====================================
-    // 🎮 Tic-Tac-Toe Game
-    // =====================================
-    if (content.toLowerCase().startsWith('+tictactoe')) {
-        const opponent = message.mentions.users.first();
-        if (!opponent) return message.reply('❌ Please mention a user to play with!');
-        if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
-        if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
+// 🎮 Tic-Tac-Toe Stats System
+// =====================================
+const tttStats = {}; // Stats storage
+const activeGames = new Map(); // Active game sessions
 
-        const gameId = `${message.author.id}-${opponent.id}`;
-        if (activeGames.has(gameId)) return message.reply('⚠️ You already have an ongoing game with this user.');
+function updateHistory(winnerId, loserId, isDraw = false) {
+    if (!tttStats[winnerId]) tttStats[winnerId] = { wins: 0, losses: 0, draws: 0, games: 0, points: 0 };
+    if (!tttStats[loserId]) tttStats[loserId] = { wins: 0, losses: 0, draws: 0, games: 0, points: 0 };
 
-        const board = Array(9).fill(null);
-        const currentPlayer = message.author;
-        activeGames.set(gameId, { board, currentPlayer, player1: message.author, player2: opponent });
+    const win = tttStats[winnerId];
+    const lose = tttStats[loserId];
 
-        const embed = new EmbedBuilder()
-            .setTitle('🎮 Tic-Tac-Toe')
-            .setDescription(renderBoard(board))
-            .setColor(0x00ff99)
-            .setFooter({ text: `Turn: ${currentPlayer.username}` });
-
-        const gameMsg = await message.channel.send({ embeds: [embed] });
-        const emojiNums = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
-        for (const e of emojiNums) await gameMsg.react(e);
-
-        const filter = (reaction, user) => emojiNums.includes(reaction.emoji.name) && !user.bot;
-        const collector = gameMsg.createReactionCollector({ filter, time: 120000 });
-
-        collector.on('collect', async (reaction, user) => {
-            const game = activeGames.get(gameId);
-            if (!game || user.id !== game.currentPlayer.id) return reaction.users.remove(user);
-
-            const index = emojiNums.indexOf(reaction.emoji.name);
-            if (game.board[index]) return reaction.users.remove(user);
-
-            const mark = user.id === game.player1.id ? '❌' : '⭕';
-            game.board[index] = mark;
-
-            const winner = checkWinner(game.board);
-            if (winner) {
-                collector.stop('win');
-                updatePoints(user.id, 3);
-                updatePoints(game.player1.id === user.id ? game.player2.id : game.player1.id, 0);
-
-                const winEmbed = new EmbedBuilder()
-                    .setTitle(`🏆 ${user.username} Wins!`)
-                    .setDescription(`${renderBoard(game.board)}\n\n+3 points awarded!`)
-                    .setColor(0xFFD700)
-                    .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif')
-                    .setFooter({ text: 'Tic-Tac-Toe Champion!' })
-                    .setTimestamp();
-
-                return gameMsg.edit({ embeds: [winEmbed] });
-            }
-
-            if (game.board.every(cell => cell)) {
-                collector.stop('draw');
-                updatePoints(game.player1.id, 1);
-                updatePoints(game.player2.id, 1);
-
-                const drawEmbed = new EmbedBuilder()
-                    .setTitle('🤝 Draw!')
-                    .setDescription(`${renderBoard(game.board)}\n\nBoth players get +1 point.`)
-                    .setColor(0x7289da)
-                    .setTimestamp();
-
-                return gameMsg.edit({ embeds: [drawEmbed] });
-            }
-
-            game.currentPlayer = game.currentPlayer.id === game.player1.id ? game.player2 : game.player1;
-            const newEmbed = new EmbedBuilder()
-                .setTitle('🎮 Tic-Tac-Toe')
-                .setDescription(renderBoard(game.board))
-                .setColor(0x00ff99)
-                .setFooter({ text: `Turn: ${game.currentPlayer.username}` });
-            gameMsg.edit({ embeds: [newEmbed] });
-        });
-
-        collector.on('end', (_, reason) => {
-            activeGames.delete(gameId);
-            if (reason === 'time') {
-                message.channel.send('⌛ Game ended due to inactivity.');
-            }
-        });
+    if (isDraw) {
+        win.draws++; lose.draws++;
+        win.games++; lose.games++;
+        win.points += 1; lose.points += 1;
         return;
     }
+
+    win.wins++; win.games++; win.points += 3;
+    lose.losses++; lose.games++;
+}
+
+function renderBoard(board) {
+    return `
+${board[0] || '⬜'} | ${board[1] || '⬜'} | ${board[2] || '⬜'}
+${board[3] || '⬜'} | ${board[4] || '⬜'} | ${board[5] || '⬜'}
+${board[6] || '⬜'} | ${board[7] || '⬜'} | ${board[8] || '⬜'}
+    `;
+}
+
+function checkWinner(b) {
+    const wins = [
+        [0,1,2],[3,4,5],[6,7,8],  
+        [0,3,6],[1,4,7],[2,5,8],  
+        [0,4,8],[2,4,6]
+    ];
+    for (const [a,b1,c] of wins) {
+        if (b[a] && b[a] === b[b1] && b[b1] === b[c]) return true;
+    }
+    return false;
+}
+
+
+// =====================================
+// 🎮 Tic-Tac-Toe Command
+// =====================================
+if (content.toLowerCase().startsWith('+tictactoe')) {
+    const opponent = message.mentions.users.first();
+    if (!opponent) return message.reply('❌ Please mention a user to play with!');
+    if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
+    if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
+
+    const gameId = `${message.author.id}-${opponent.id}`;
+    if (activeGames.has(gameId)) return message.reply('⚠️ You already have an ongoing game with this user.');
+
+    const board = Array(9).fill(null);
+    const currentPlayer = message.author;
+
+    activeGames.set(gameId, {
+        board,
+        currentPlayer,
+        player1: message.author,
+        player2: opponent
+    });
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎮 Tic-Tac-Toe')
+        .setDescription(renderBoard(board))
+        .setColor(0x00ff99)
+        .setFooter({ text: `Turn: ${currentPlayer.username}` });
+
+    const gameMsg = await message.channel.send({ embeds: [embed] });
+
+    const emojiNums = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+    for (const e of emojiNums) await gameMsg.react(e);
+
+    const filter = (reaction, user) =>
+        emojiNums.includes(reaction.emoji.name) && !user.bot;
+
+    const collector = gameMsg.createReactionCollector({ filter, time: 120000 });
+
+    collector.on('collect', async (reaction, user) => {
+        const game = activeGames.get(gameId);
+        if (!game) return;
+
+        if (user.id !== game.currentPlayer.id)
+            return reaction.users.remove(user);
+
+        const index = emojiNums.indexOf(reaction.emoji.name);
+        if (game.board[index]) return reaction.users.remove(user);
+
+        const mark = user.id === game.player1.id ? '❌' : '⭕';
+        game.board[index] = mark;
+
+        const winnerFound = checkWinner(game.board);
+
+        // WINNER SECTION
+        if (winnerFound) {
+            collector.stop('win');
+
+            const loser = game.player1.id === user.id
+                ? game.player2
+                : game.player1;
+
+            updateHistory(user.id, loser.id, false);
+
+            const winData = tttStats[user.id];
+            const loseData = tttStats[loser.id];
+
+            const winRate = (winData.wins / winData.games * 100).toFixed(2);
+
+            const winEmbed = new EmbedBuilder()
+                .setTitle(`🏆 ${user.username} Wins!`)
+                .setDescription(
+                    `${renderBoard(game.board)}\n\n` +
+                    `🎉 **Match History Updated!**\n\n` +
+                    `**${user.username}**\n` +
+                    `> Wins: ${winData.wins}\n` +
+                    `> Losses: ${winData.losses}\n` +
+                    `> Draws: ${winData.draws}\n` +
+                    `> Games Played: ${winData.games}\n` +
+                    `> Win Rate: ${winRate}%\n` +
+                    `> Points: ${winData.points}\n\n` +
+
+                    `**${loser.username}**\n` +
+                    `> Wins: ${loseData.wins}\n` +
+                    `> Losses: ${loseData.losses}\n` +
+                    `> Draws: ${loseData.draws}\n` +
+                    `> Games Played: ${loseData.games}\n` +
+                    `> Points: ${loseData.points}`
+                )
+                .setColor(0xFFD700)
+                .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif')
+                .setFooter({ text: 'Tic-Tac-Toe Champion!' })
+                .setTimestamp();
+
+            return gameMsg.edit({ embeds: [winEmbed] });
+        }
+
+        // DRAW SECTION
+        if (game.board.every(cell => cell)) {
+            collector.stop('draw');
+
+            updateHistory(game.player1.id, game.player2.id, true);
+
+            const p1 = tttStats[game.player1.id];
+            const p2 = tttStats[game.player2.id];
+
+            const p1WR = (p1.wins / p1.games * 100).toFixed(2);
+            const p2WR = (p2.wins / p2.games * 100).toFixed(2);
+
+            const drawEmbed = new EmbedBuilder()
+                .setTitle('🤝 Draw!')
+                .setDescription(
+                    `${renderBoard(game.board)}\n\n` +
+                    `📊 **Match History Updated!**\n\n` +
+
+                    `**${game.player1.username}**\n` +
+                    `> Wins: ${p1.wins}\n` +
+                    `> Losses: ${p1.losses}\n` +
+                    `> Draws: ${p1.draws}\n` +
+                    `> Games Played: ${p1.games}\n` +
+                    `> Win Rate: ${p1WR}%\n` +
+                    `> Points: ${p1.points}\n\n` +
+
+                    `**${game.player2.username}**\n` +
+                    `> Wins: ${p2.wins}\n` +
+                    `> Losses: ${p2.losses}\n` +
+                    `> Draws: ${p2.draws}\n` +
+                    `> Games Played: ${p2.games}\n` +
+                    `> Win Rate: ${p2WR}%\n` +
+                    `> Points: ${p2.points}`
+                )
+                .setColor(0x7289da)
+                .setTimestamp();
+
+            return gameMsg.edit({ embeds: [drawEmbed] });
+        }
+
+        // NEXT TURN
+        game.currentPlayer =
+            game.currentPlayer.id === game.player1.id
+                ? game.player2
+                : game.player1;
+
+        const newEmbed = new EmbedBuilder()
+            .setTitle('🎮 Tic-Tac-Toe')
+            .setDescription(renderBoard(game.board))
+            .setColor(0x00ff99)
+            .setFooter({ text: `Turn: ${game.currentPlayer.username}` });
+
+        gameMsg.edit({ embeds: [newEmbed] });
+    });
+
+    collector.on('end', (_, reason) => {
+        activeGames.delete(gameId);
+        if (reason === 'time') {
+            message.channel.send('⌛ Game ended due to inactivity.');
+        }
+    });
+    return;
+}
+
 
     // ==========================
     // USER INFO COMMAND
