@@ -184,50 +184,6 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // =====================================
-// 🎮 Tic-Tac-Toe Stats System
-// =====================================
-const tttStats = {}; // Stats storage
-const activeGames = new Map(); // Active game sessions
-
-function updateHistory(winnerId, loserId, isDraw = false) {
-    if (!tttStats[winnerId]) tttStats[winnerId] = { wins: 0, losses: 0, draws: 0, games: 0, points: 0 };
-    if (!tttStats[loserId]) tttStats[loserId] = { wins: 0, losses: 0, draws: 0, games: 0, points: 0 };
-
-    const win = tttStats[winnerId];
-    const lose = tttStats[loserId];
-
-    if (isDraw) {
-        win.draws++; lose.draws++;
-        win.games++; lose.games++;
-        win.points += 1; lose.points += 1;
-        return;
-    }
-
-    win.wins++; win.games++; win.points += 3;
-    lose.losses++; lose.games++;
-}
-
-function renderBoard(board) {
-    return `
-${board[0] || '⬜'} | ${board[1] || '⬜'} | ${board[2] || '⬜'}
-${board[3] || '⬜'} | ${board[4] || '⬜'} | ${board[5] || '⬜'}
-${board[6] || '⬜'} | ${board[7] || '⬜'} | ${board[8] || '⬜'}
-    `;
-}
-
-function checkWinner(b) {
-    const wins = [
-        [0,1,2],[3,4,5],[6,7,8],  
-        [0,3,6],[1,4,7],[2,5,8],  
-        [0,4,8],[2,4,6]
-    ];
-    for (const [a,b1,c] of wins) {
-        if (b[a] && b[a] === b[b1] && b[b1] === b[c]) return true;
-    }
-    return false;
-}
-
 
 // =====================================
 // 🎮 Tic-Tac-Toe Command
