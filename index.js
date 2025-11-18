@@ -66,7 +66,7 @@ client.on("messageCreate", async (message) => {
   const raw = message.content;
   const content = raw.trim();
   const lc = content.toLowerCase();
-
+}
 // =====================================
 // 📩 Message Event
 // =====================================
@@ -459,36 +459,49 @@ client.on('messageCreate', async (message) => {
     return message.reply(`⛔ You are now in DND mode: "${msg}"`);
   }
 
-  // ==========================
-  // POLL COMMAND
-  // ==========================
-  if (content.startsWith('+poll')) {
-    const cooldownLeft = isOnCooldown('+poll', message.author.id);
-    if (cooldownLeft) return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
-      
-.setColor(0xFFD700)
-          .setImage('https://usagif.com/wp-content/uploads/gify/all-might-toshinori-yagi-showing-off-muscles-usagif.gif')
-          .setFooter({ text: 'Tic-Tac-Toe Champion!' })
-          .setTimestamp();
+// ==========================
+// POLL COMMAND (UPDATED)
+// ==========================
+if (content.startsWith('+poll')) {
+  const cooldownLeft = isOnCooldown('+poll', message.author.id);
+  if (cooldownLeft) 
+    return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
 
-    const args = content.match(/"([^"]+)"|[^\s]+/g);
-    if (!args || args.length < 3)
-      return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
-    const question = args[0].replace(/"/g, '');
-    const options = args.slice(1);
-    if (options.length > pollEmojis.length) return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
+  // Parse arguments
+  const args = content.match(/"([^"]+)"|[^\s]+/g);
+  if (!args || args.length < 3)
+    return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
 
-    const desc = options.map((opt, i) => `${pollEmojis[i]} — ${opt}`).join('\n');
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 ${question}`)
-      .setDescription(desc)
-      .setColor(0x3498db);
-    const pollMsg = await message.channel.send({ embeds: [embed] });
-    for (let i = 0; i < options.length; i++) {
-      try { await pollMsg.react(pollEmojis[i]); } catch (err) {}
-    }
-    return;
+  const question = args[0].replace(/"/g, '');
+  const options = args.slice(1);
+
+  if (options.length > pollEmojis.length)
+    return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
+
+  // Description formatting
+  const desc = options
+    .map((opt, i) => `${pollEmojis[i]} — ${opt}`)
+    .join('\n');
+
+  // Create embed
+  const embed = new EmbedBuilder()
+    .setTitle(`📊 Poll Started!`)
+    .setDescription(`**${question}**\n\n${desc}`)
+    .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif')
+    .setColor(0xFFD700)
+    .setFooter({ text: `Poll created by ${message.author.username}` })
+    .setTimestamp();
+
+  // Send poll message
+  const pollMsg = await message.channel.send({ embeds: [embed] });
+
+  // Add reactions
+  for (let i = 0; i < options.length; i++) {
+    try { await pollMsg.react(pollEmojis[i]); } catch (err) {}
   }
+
+  return;
+}
 
   // ==========================
   // REMOVE AFK/DND ON MESSAGE
