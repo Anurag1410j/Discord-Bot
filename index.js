@@ -1,4 +1,4 @@
-// index.js
+commands of this code bot (// index.js
 require('dotenv').config();
 const {
   Client,
@@ -20,7 +20,14 @@ const client = new Client({
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction]
 });
+// ========== Slash Command Handler ==========
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
+  if (interaction.commandName === 'ping') {
+    return interaction.reply('Pong! 🏓');
+  }
+});
 // ====== Config / Storage ======
 const OWNER_ID = '1418613878052360345';
 
@@ -572,3 +579,4 @@ client.once('ready', () => {
 
 client.login(process.env.DISCORD_TOKEN)
   .catch(err => console.error('❌ Login failed:', err.message));
+)
