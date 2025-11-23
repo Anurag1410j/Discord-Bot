@@ -6,7 +6,10 @@ const {
   EmbedBuilder,
   PermissionsBitField,
   Partials,
-  ChannelType
+  ChannelType,
+  SlashCommandBuilder,
+  REST,
+  Routes
 } = require('discord.js');
 
 const client = new Client({
@@ -29,13 +32,11 @@ const userPoints = new Map(); // generic points if needed
 const activeGames = new Map(); // tic-tac-toe active games
 const pollEmojis = ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭','🇮','🇯'];
 const triggerWords = { hello: '😘', wow: '😮', lol: '😂' };
-
-// Prevent processing the same message multiple times
 const processedMessages = new Set();
 
-// Per-command cooldowns (seconds) and tracker
+// Cooldowns
 const commandCooldowns = {
-  '+poll': 10,         // per-user cooldown in seconds
+  '+poll': 10,
   '+tictactoe': 5,
   '+warn': 3,
   '+timeout': 3,
@@ -48,45 +49,99 @@ const commandCooldowns = {
 };
 const cooldowns = new Map(); // Map<command, Map<userId, expireTimestamp>>
 
-// TicTacToe stats store
-const tttStats = {}; // key: userId -> { wins, losses, draws, games, points }
+// TicTacToe stats
+const tttStats = {}; // userId -> { wins, losses, draws, games, points }
+
+// =======================
+// ✅ Cooldown Helpers
+// =======================
+function isOnCooldown(command, userId) {
+  const now = Date.now();
+  if (!commandCooldowns[command]) return 0;
+
+  if (!cooldowns.has(command)) cooldowns.set(command, new Map());
+  const userMap = cooldowns.get(command);
+
+  const expiresAt = userMap.get(userId) || 0;
+  if (now < expiresAt) {
+    const diff = Math.ceil((expiresAt - now) / 1000);
+    return diff;
+  }
+
+  userMap.set(userId, now + commandCooldowns[command] * 1000);
+  return 0;
+}
 
 // =====================================
-// ✅ Bot Ready
+// 🧩 Helper Functions
 // =====================================
-client.on("messageCreate", async (message) => {
+function renderBoard(board) {
+  return `
+${board[0] || '⬜'}${board[1] || '⬜'}${board[2] || '⬜'}
+${board[3] || '⬜'}${board[4] || '⬜'}${board[5] || '⬜'}
+${board[6] || '⬜'}${board[7] || '⬜'}${board[8] || '⬜'}
+  `;
+}
+
+function checkWinner(board) {
+  const wins = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (const [a,b,c] of wins)
+    if (board[a] && board[a] === board[b] && board[a] === board[c])
+      return board[a];
+  return null;
+}
+
+function updatePoints(userId, points) {
+  const prev = userPoints.get(userId) || 0;
+  userPoints.set(userId, prev + points);
+}
+
+function updateHistory(winnerId, loserId, isDraw = false) {
+  if (isDraw) {
+    if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+    if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+    tttStats[winnerId].draws++;
+    tttStats[loserId].draws++;
+    tttStats[winnerId].games++;
+    tttStats[loserId].games++;
+    tttStats[winnerId].points++;
+    tttStats[loserId].points++;
+    return;
+  }
+
+  if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+  if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+
+  tttStats[winnerId].wins++;
+  tttStats[winnerId].games++;
+  tttStats[winnerId].points += 3;
+
+  tttStats[loserId].losses++;
+  tttStats[loserId].games++;
+}
+
+// =====================================
+// 📩 Message Event (prefix commands)
+// =====================================
+client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content) return;
 
-  // Prevent duplicate execution
   if (processedMessages.has(message.id)) return;
   processedMessages.add(message.id);
-  setTimeout(() => processedMessages.delete(message.id), 300000);
-
-  const raw = message.content;
-  const content = raw.trim();
-  const lc = content.toLowerCase();
-}
-// =====================================
-// 📩 Message Event
-// =====================================
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return; // Ignore bot messages
-  if (!message.content) return;
-
-  // prevent processing same message more than once
-  if (processedMessages.has(message.id)) return;
-  processedMessages.add(message.id);
-  // cleanup processedMessages after some time to avoid memory growth
-  setTimeout(() => processedMessages.delete(message.id), 5 * 60 * 1000); // 5 minutes
+  setTimeout(() => processedMessages.delete(message.id), 5 * 60 * 1000);
 
   const raw = message.content;
   const content = raw.trim();
   const lc = content.toLowerCase();
 
-  // =====================================
-  // 🐞 Bug Report via DM
-  // =====================================
+  // ==========================
+  // 🐞 DM Bug Report
+  // ==========================
   if (message.channel.type === ChannelType.DM) {
     try {
       const owner = await client.users.fetch(OWNER_ID);
@@ -103,15 +158,15 @@ client.on('messageCreate', async (message) => {
       console.error('Error sending report:', err);
       await message.reply('⚠️ Error sending your report.');
     }
-    return; // End here for DMs 
+    return;
   }
 
-  // =====================================
-  // 🔤 React on Specific Words
-  // =====================================
+  // ==========================
+  // 🔤 Trigger Word Reactions
+  // ==========================
   for (const word in triggerWords) {
     if (lc.includes(word)) {
-      try { await message.react(triggerWords[word]); } catch (e) {}
+      try { await message.react(triggerWords[word]); } catch {}
     }
   }
 
@@ -129,13 +184,12 @@ client.on('messageCreate', async (message) => {
         { name: '*Set Do Not Disturb mode*', value:'⛔ +dnd [msg]'  },
         { name: '*Show user avatar*', value: '🖼️ +av [@user or id]' },
         { name: '*Show user info*', value: '📜 +user [@user]' },
-        { name:  '*Create a poll with up to 10 options*', value: '📊 +poll "Question" Option1 Option2...' },
-        { name:  '*Play Tic-Tac-Toe with points!*',value: '🎮 +tictactoe @user'},
-        { name: '*🛡️Moderation commands for staff*', value: 'Hidden commands reserved for moderators only.' },
-        { name: '*Report bugs directly to the owner*', value: '🐞 DM me' },
-        { name: '*HELP Command*', value: '❓+help' }
+        { name: '*Create a poll*', value: '📊 +poll "Question" Option1 Option2...' },
+        { name: '*Play Tic-Tac-Toe*', value: '🎮 +tictactoe @user' },
+        { name: '*Moderation*', value: '⚒ +warn / +timeout / +ban' },
+        { name: '*Bug Report*', value: '🐞 DM me any issue.' }
       )
-      .addFields({ name: 'Created by **BLYTZ** ', value: 'Creator and Manager' })
+      .addFields({ name: 'Created by **BLYTZ**', value: 'Creator and Manager' })
       .setFooter({ text: 'More features coming soon!' })
       .setTimestamp();
 
@@ -173,7 +227,7 @@ client.on('messageCreate', async (message) => {
     if (cooldownLeft) return message.reply(`⏳ Wait ${cooldownLeft}s to use +timeout again.`);
 
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-      return message.reply('❌ You need `Moderate Members` permission.');
+      return message.reply('❌ You need `Moderate Members` permission.`');
 
     const args = content.split(/\s+/);
     const target = message.mentions.members.first();
@@ -241,20 +295,18 @@ client.on('messageCreate', async (message) => {
     if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
     if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
 
-    // create canonical game id where order doesn't matter
     const ids = [message.author.id, opponent.id].sort();
     const gameId = `${ids[0]}-${ids[1]}`;
 
     if (activeGames.has(gameId)) return message.reply('⚠️ There is already an ongoing game between you two.');
 
-    // initialize stats for players if missing
     if (!tttStats[message.author.id]) tttStats[message.author.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
     if (!tttStats[opponent.id]) tttStats[opponent.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
 
     const board = Array(9).fill(null);
     const player1 = message.author;
     const player2 = opponent;
-    const currentPlayer = player1; // X starts
+    const currentPlayer = player1;
 
     activeGames.set(gameId, {
       board,
@@ -272,13 +324,12 @@ client.on('messageCreate', async (message) => {
       .setFooter({ text: `Turn: ${currentPlayer.username}` });
 
     const gameMsg = await message.channel.send({ embeds: [embed] });
-    // store message reference
     const gameData = activeGames.get(gameId);
     gameData.gameMsg = gameMsg;
 
     const emojiNums = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
     for (const e of emojiNums) {
-      try { await gameMsg.react(e); } catch (err) {}
+      try { await gameMsg.react(e); } catch {}
     }
 
     const filter = (reaction, user) =>
@@ -288,26 +339,22 @@ client.on('messageCreate', async (message) => {
     gameData.collector = collector;
 
     collector.on('collect', async (reaction, user) => {
-      // remove extra reactions from same user (to keep UI tidy)
       try { await reaction.users.remove(user.id); } catch {}
 
       const game = activeGames.get(gameId);
       if (!game) return;
 
-      if (user.id !== game.currentPlayer.id) {
-        return; // ignore reaction from not-current player
-      }
+      if (user.id !== game.currentPlayer.id) return;
 
       const index = emojiNums.indexOf(reaction.emoji.name);
       if (index === -1) return;
-      if (game.board[index]) return; // already taken
+      if (game.board[index]) return;
 
       const mark = user.id === game.player1.id ? '❌' : '⭕';
       game.board[index] = mark;
 
       const winnerFound = checkWinner(game.board);
 
-      // WINNER SECTION
       if (winnerFound) {
         collector.stop('win');
 
@@ -333,7 +380,6 @@ client.on('messageCreate', async (message) => {
             `> Games Played: ${winData.games}\n` +
             `> Win Rate: ${winRate}%\n` +
             `> Points: ${winData.points}\n\n` +
-
             `**${loserUser.username}**\n` +
             `> Wins: ${loseData.wins}\n` +
             `> Losses: ${loseData.losses}\n` +
@@ -342,7 +388,6 @@ client.on('messageCreate', async (message) => {
             `> Points: ${loseData.points}`
           )
           .setColor(0xFFD700)
-          .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif')
           .setFooter({ text: 'Tic-Tac-Toe Champion!' })
           .setTimestamp();
 
@@ -350,7 +395,6 @@ client.on('messageCreate', async (message) => {
         return gameMsg.edit({ embeds: [winEmbed] });
       }
 
-      // DRAW SECTION
       if (game.board.every(cell => cell)) {
         collector.stop('draw');
 
@@ -367,7 +411,6 @@ client.on('messageCreate', async (message) => {
           .setDescription(
             `${renderBoard(game.board)}\n\n` +
             `📊 **Match History Updated!**\n\n` +
-
             `**${game.player1.username}**\n` +
             `> Wins: ${p1.wins}\n` +
             `> Losses: ${p1.losses}\n` +
@@ -375,7 +418,6 @@ client.on('messageCreate', async (message) => {
             `> Games Played: ${p1.games}\n` +
             `> Win Rate: ${p1WR}%\n` +
             `> Points: ${p1.points}\n\n` +
-
             `**${game.player2.username}**\n` +
             `> Wins: ${p2.wins}\n` +
             `> Losses: ${p2.losses}\n` +
@@ -391,7 +433,6 @@ client.on('messageCreate', async (message) => {
         return gameMsg.edit({ embeds: [drawEmbed] });
       }
 
-      // NEXT TURN
       game.currentPlayer = (game.currentPlayer.id === game.player1.id) ? game.player2 : game.player1;
 
       const newEmbed = new EmbedBuilder()
@@ -404,7 +445,6 @@ client.on('messageCreate', async (message) => {
     });
 
     collector.on('end', (_, reason) => {
-      // cleanup
       if (activeGames.has(gameId)) activeGames.delete(gameId);
       if (reason === 'time') {
         message.channel.send('⌛ Game ended due to inactivity.');
@@ -459,54 +499,46 @@ client.on('messageCreate', async (message) => {
     return message.reply(`⛔ You are now in DND mode: "${msg}"`);
   }
 
-// ==========================
-// POLL COMMAND (UPDATED)
-// ==========================
-if (content.startsWith('+poll')) {
-  const cooldownLeft = isOnCooldown('+poll', message.author.id);
-  if (cooldownLeft) 
-    return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
+  // ==========================
+  // POLL COMMAND (UPDATED)
+  // ==========================
+  if (content.startsWith('+poll')) {
+    const cooldownLeft = isOnCooldown('+poll', message.author.id);
+    if (cooldownLeft)
+      return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
 
-  // Parse arguments
-  const args = content.match(/"([^"]+)"|[^\s]+/g);
-  if (!args || args.length < 3)
-    return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
+    const args = content.match(/"([^"]+)"|[^\s]+/g);
+    if (!args || args.length < 3)
+      return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
 
-  const question = args[0].replace(/"/g, '');
-  const options = args.slice(1);
+    const question = args[0].replace(/"/g, '');
+    const options = args.slice(1);
 
-  if (options.length > pollEmojis.length)
-    return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
+    if (options.length > pollEmojis.length)
+      return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
 
-  // Format description
-  const desc = options
-    .map((opt, i) => `${pollEmojis[i]} — ${opt}`)
-    .join('\n');
+    const desc = options
+      .map((opt, i) => `${pollEmojis[i]} — ${opt}`)
+      .join('\n');
 
-  // Create embed with GIF → Question → Options
-  const embed = new EmbedBuilder()
-    .setTitle(`📊 Poll Started!`)
-    .setDescription(`**${question}**\n\n${desc}`)
-    .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif') // GIF first
-    .setColor(0xFFD700)
-    .setFooter({ text: `Poll created by ${message.author.username}` })
-    .setTimestamp();
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Poll Started!')
+      .setDescription(`**${question}**\n\n${desc}`)
+      .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif')
+      .setColor(0xFFD700)
+      .setFooter({ text: `Poll created by ${message.author.username}` })
+      .setTimestamp();
 
-  // Send poll
-  const pollMsg = await message.channel.send({ embeds: [embed] });
+    const pollMsg = await message.channel.send({ embeds: [embed] });
 
-  // Add reactions
-  for (let i = 0; i < options.length; i++) {
-    try { 
-      await pollMsg.react(pollEmojis[i]); 
-    } catch (err) {
-      console.log("Reaction Error:", err);
+    for (let i = 0; i < options.length; i++) {
+      try { await pollMsg.react(pollEmojis[i]); } catch (err) {
+        console.log('Reaction Error:', err);
+      }
     }
+
+    return;
   }
-
-  return;
-}
-
 
   // ==========================
   // REMOVE AFK/DND ON MESSAGE
@@ -555,88 +587,58 @@ if (content.startsWith('+poll')) {
       .setColor(0x5865f2);
     return message.reply({ embeds: [embed] });
   }
-
 });
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
-require('dotenv').config();
-
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
-});
-
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}`);
-});
-
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    if (interaction.commandName === 'ping') {
-        await interaction.reply('Pong! 🏓');
-    }
-});
-
-client.login(process.env.TOKEN);
-
 
 // =====================================
-// 🧩 Helper Functions
+// 🔹 Slash Commands (/ping)
 // =====================================
-function renderBoard(board) {
-  return `
-${board[0] || '⬜'}${board[1] || '⬜'}${board[2] || '⬜'}
-${board[3] || '⬜'}${board[4] || '⬜'}${board[5] || '⬜'}
-${board[6] || '⬜'}${board[7] || '⬜'}${board[8] || '⬜'}
-  `;
-}
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
-function checkWinner(board) {
-  const wins = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6]
-  ];
-  for (const [a,b,c] of wins)
-    if (board[a] && board[a] === board[b] && board[a] === board[c])
-      return board[a];
-  return null;
-}
+  if (interaction.commandName === 'ping') {
+    return interaction.reply({ content: '🏓 Pong! I am alive!', ephemeral: true });
+  }
+});
 
-function updatePoints(userId, points) {
-  const prev = userPoints.get(userId) || 0;
-  userPoints.set(userId, prev + points);
-}
+// =====================================
+// 🚀 Register Slash Commands
+// =====================================
+async function registerSlashCommands() {
+  const token = process.env.DISCORD_TOKEN;
+  const clientId = process.env.CLIENT_ID;
 
-// TicTacToe: update history + points
-// Win: +3 points, Draw: +1 each, Loss: 0
-function updateHistory(winnerId, loserId, isDraw=false) {
-  if (isDraw) {
-    if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-    if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-    tttStats[winnerId].draws += 1;
-    tttStats[loserId].draws += 1;
-    tttStats[winnerId].games += 1;
-    tttStats[loserId].games += 1;
-    tttStats[winnerId].points += 1;
-    tttStats[loserId].points += 1;
+  if (!token || !clientId) {
+    console.warn('⚠️ Missing DISCORD_TOKEN or CLIENT_ID env vars. Slash commands not registered.');
     return;
   }
 
-  // normal win/loss
-  if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-  if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('ping')
+      .setDescription('Replies with Pong! 🏓')
+  ].map(cmd => cmd.toJSON());
 
-  tttStats[winnerId].wins += 1;
-  tttStats[winnerId].games += 1;
-  tttStats[winnerId].points += 3;
+  const rest = new REST({ version: '10' }).setToken(token);
 
-  tttStats[loserId].losses += 1;
-  tttStats[loserId].games += 1;
-  // loser gets 0 points
+  try {
+    console.log('🔁 Refreshing application (/) commands...');
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: commands }
+    );
+    console.log('✅ Successfully registered application (/) commands.');
+  } catch (error) {
+    console.error('❌ Error registering slash commands:', error);
+  }
 }
 
 // =====================================
-// 🚀 Start the Bot
+// ✅ Ready + Login
 // =====================================
+client.once('ready', async () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+  await registerSlashCommands();
+});
+
 client.login(process.env.DISCORD_TOKEN)
   .catch(err => console.error('❌ Login failed:', err.message));
