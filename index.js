@@ -70,19 +70,26 @@ client.on("messageCreate", async (message) => {
 // =====================================
 // 📩 Message Event
 // =====================================
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return; // Ignore bot messages
-  if (!message.content) return;
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
+require('dotenv').config();
 
-  // prevent processing same message more than once
-  if (processedMessages.has(message.id)) return;
-  processedMessages.add(message.id);
-  // cleanup processedMessages after some time to avoid memory growth
-  setTimeout(() => processedMessages.delete(message.id), 5 * 60 * 1000); // 5 minutes
+const client = new Client({
+    intents: [GatewayIntentBits.Guilds]
+});
 
-  const raw = message.content;
-  const content = raw.trim();
-  const lc = content.toLowerCase();
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}`);
+});
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'ping') {
+        await interaction.reply('Pong! 🏓');
+    }
+});
+
+client.login(process.env.TOKEN);
 
   // =====================================
   // 🐞 Bug Report via DM
