@@ -21,21 +21,19 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.Reaction]
 });
 
+// ====== Config / Storage ======
 const OWNER_ID = '1418613878052360345';
 
-// In-memory storage
-const userStatus = new Map(); // AFK/DND
-const userPoints = new Map(); // generic points if needed
-const activeGames = new Map(); // tic-tac-toe active games
+const userStatus = new Map();   // AFK / DND
+const userPoints = new Map();   // generic points storage
+const activeGames = new Map();  // tic-tac-toe games
+const processedMessages = new Set();
+
 const pollEmojis = ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭','🇮','🇯'];
 const triggerWords = { hello: '😘', wow: '😮', lol: '😂' };
 
-// Prevent processing the same message multiple times
-const processedMessages = new Set();
-
-// Per-command cooldowns (seconds) and tracker
 const commandCooldowns = {
-  '+poll': 10,         // per-user cooldown in seconds
+  '+poll': 10,
   '+tictactoe': 5,
   '+warn': 3,
   '+timeout': 3,
@@ -46,54 +44,95 @@ const commandCooldowns = {
   '+user': 2,
   '+help': 2
 };
-const cooldowns = new Map(); // Map<command, Map<userId, expireTimestamp>>
+const cooldowns = new Map();
 
-// TicTacToe stats store
-const tttStats = {}; // key: userId -> { wins, losses, draws, games, points }
+const tttStats = {}; // { userId: { wins, losses, draws, games, points } }
 
-// =====================================
-// ✅ Bot Ready
-// =====================================
-client.on("messageCreate", async (message) => {
+
+// =====================
+// Helper functions
+// =====================
+function isOnCooldown(cmd, userId) {
+  if (!commandCooldowns[cmd]) return 0;
+  if (!cooldowns.has(cmd)) cooldowns.set(cmd, new Map());
+  const map = cooldowns.get(cmd);
+  const expire = map.get(userId) || 0;
+  const now = Date.now();
+  if (now < expire) return Math.ceil((expire - now) / 1000);
+  map.set(userId, now + commandCooldowns[cmd] * 1000);
+  return 0;
+}
+
+function renderBoard(board) {
+  return `
+${board[0] || '⬜'}${board[1] || '⬜'}${board[2] || '⬜'}
+${board[3] || '⬜'}${board[4] || '⬜'}${board[5] || '⬜'}
+${board[6] || '⬜'}${board[7] || '⬜'}${board[8] || '⬜'}
+  `;
+}
+
+function checkWinner(board) {
+  const wins = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (const [a,b,c] of wins) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+  }
+  return null;
+}
+
+function updatePoints(userId, points) {
+  const prev = userPoints.get(userId) || 0;
+  userPoints.set(userId, prev + points);
+}
+
+// TicTacToe history update (Win: +3, Draw: +1 each, Loss: 0)
+function updateHistory(winnerId, loserId, isDraw = false) {
+  if (isDraw) {
+    if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+    if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+    tttStats[winnerId].draws += 1;
+    tttStats[loserId].draws += 1;
+    tttStats[winnerId].games += 1;
+    tttStats[loserId].games += 1;
+    tttStats[winnerId].points += 1;
+    tttStats[loserId].points += 1;
+    return;
+  }
+
+  if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+  if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
+
+  tttStats[winnerId].wins += 1;
+  tttStats[winnerId].games += 1;
+  tttStats[winnerId].points += 3;
+
+  tttStats[loserId].losses += 1;
+  tttStats[loserId].games += 1;
+}
+
+
+// =====================
+// Message handler (single, correct)
+// =====================
+client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content) return;
-});
-  // Prevent duplicate execution
+
+  // Prevent duplicate processing
   if (processedMessages.has(message.id)) return;
   processedMessages.add(message.id);
-  setTimeout(() => processedMessages.delete(message.id), 300000);
+  setTimeout(() => processedMessages.delete(message.id), 5 * 60 * 1000); // 5 minutes
 
   const raw = message.content;
   const content = raw.trim();
   const lc = content.toLowerCase();
-}
-// =====================================
-// 📩 Message Event
-// =====================================
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
-require('dotenv').config();
 
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
-});
-
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}`);
-});
-
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    if (interaction.commandName === 'ping') {
-        await interaction.reply('Pong! 🏓');
-    }
-});
-
-client.login(process.env.TOKEN);
-
-  // =====================================
-  // 🐞 Bug Report via DM
-  // =====================================
+  // --------------------
+  // Bug report via DM -> send to owner
+  // --------------------
   if (message.channel.type === ChannelType.DM) {
     try {
       const owner = await client.users.fetch(OWNER_ID);
@@ -110,12 +149,12 @@ client.login(process.env.TOKEN);
       console.error('Error sending report:', err);
       await message.reply('⚠️ Error sending your report.');
     }
-    return; // End here for DMs 
+    return;
   }
 
-  // =====================================
-  // 🔤 React on Specific Words
-  // =====================================
+  // --------------------
+  // Trigger-word reactions
+  // --------------------
   for (const word in triggerWords) {
     if (lc.includes(word)) {
       try { await message.react(triggerWords[word]); } catch (e) {}
@@ -197,9 +236,7 @@ client.login(process.env.TOKEN);
         .setColor(0xff5555)
         .setDescription(`**User:** ${target.user.tag}\n**By:** ${message.author.tag}\n**Duration:** ${duration} min\n**Reason:** ${reason}`)
         .setTimestamp();
-      try {
-        await target.send(`⏳ You were timed out for ${duration} minute(s) in **${message.guild.name}**.\nReason: ${reason}`);
-      } catch {}
+      try { await target.send(`⏳ You were timed out for ${duration} minute(s) in **${message.guild.name}**.\nReason: ${reason}`); } catch {}
       await message.channel.send({ embeds: [embed] });
     } catch (err) {
       message.reply('⚠️ Unable to timeout user. Make sure I have the correct permissions and role hierarchy.');
@@ -219,9 +256,7 @@ client.login(process.env.TOKEN);
     const reason = content.split(' ').slice(2).join(' ') || 'No reason provided';
     if (!target) return message.reply('⚠️ Please mention a member to ban.');
 
-    try {
-      await target.send(`🔨 You have been **banned** from **${message.guild.name}**.\nReason: ${reason}`);
-    } catch {}
+    try { await target.send(`🔨 You have been **banned** from **${message.guild.name}**.\nReason: ${reason}`); } catch {}
     try {
       await target.ban({ reason });
       const embed = new EmbedBuilder()
@@ -248,20 +283,18 @@ client.login(process.env.TOKEN);
     if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
     if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
 
-    // create canonical game id where order doesn't matter
     const ids = [message.author.id, opponent.id].sort();
     const gameId = `${ids[0]}-${ids[1]}`;
 
     if (activeGames.has(gameId)) return message.reply('⚠️ There is already an ongoing game between you two.');
 
-    // initialize stats for players if missing
     if (!tttStats[message.author.id]) tttStats[message.author.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
     if (!tttStats[opponent.id]) tttStats[opponent.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
 
     const board = Array(9).fill(null);
     const player1 = message.author;
     const player2 = opponent;
-    const currentPlayer = player1; // X starts
+    let currentPlayer = player1; // X starts
 
     activeGames.set(gameId, {
       board,
@@ -279,7 +312,6 @@ client.login(process.env.TOKEN);
       .setFooter({ text: `Turn: ${currentPlayer.username}` });
 
     const gameMsg = await message.channel.send({ embeds: [embed] });
-    // store message reference
     const gameData = activeGames.get(gameId);
     gameData.gameMsg = gameMsg;
 
@@ -295,26 +327,21 @@ client.login(process.env.TOKEN);
     gameData.collector = collector;
 
     collector.on('collect', async (reaction, user) => {
-      // remove extra reactions from same user (to keep UI tidy)
       try { await reaction.users.remove(user.id); } catch {}
 
       const game = activeGames.get(gameId);
       if (!game) return;
-
-      if (user.id !== game.currentPlayer.id) {
-        return; // ignore reaction from not-current player
-      }
+      if (user.id !== game.currentPlayer.id) return;
 
       const index = emojiNums.indexOf(reaction.emoji.name);
       if (index === -1) return;
-      if (game.board[index]) return; // already taken
+      if (game.board[index]) return;
 
       const mark = user.id === game.player1.id ? '❌' : '⭕';
       game.board[index] = mark;
 
       const winnerFound = checkWinner(game.board);
 
-      // WINNER SECTION
       if (winnerFound) {
         collector.stop('win');
 
@@ -340,7 +367,6 @@ client.login(process.env.TOKEN);
             `> Games Played: ${winData.games}\n` +
             `> Win Rate: ${winRate}%\n` +
             `> Points: ${winData.points}\n\n` +
-
             `**${loserUser.username}**\n` +
             `> Wins: ${loseData.wins}\n` +
             `> Losses: ${loseData.losses}\n` +
@@ -357,7 +383,6 @@ client.login(process.env.TOKEN);
         return gameMsg.edit({ embeds: [winEmbed] });
       }
 
-      // DRAW SECTION
       if (game.board.every(cell => cell)) {
         collector.stop('draw');
 
@@ -374,7 +399,6 @@ client.login(process.env.TOKEN);
           .setDescription(
             `${renderBoard(game.board)}\n\n` +
             `📊 **Match History Updated!**\n\n` +
-
             `**${game.player1.username}**\n` +
             `> Wins: ${p1.wins}\n` +
             `> Losses: ${p1.losses}\n` +
@@ -382,7 +406,6 @@ client.login(process.env.TOKEN);
             `> Games Played: ${p1.games}\n` +
             `> Win Rate: ${p1WR}%\n` +
             `> Points: ${p1.points}\n\n` +
-
             `**${game.player2.username}**\n` +
             `> Wins: ${p2.wins}\n` +
             `> Losses: ${p2.losses}\n` +
@@ -398,9 +421,8 @@ client.login(process.env.TOKEN);
         return gameMsg.edit({ embeds: [drawEmbed] });
       }
 
-      // NEXT TURN
+      // Next turn
       game.currentPlayer = (game.currentPlayer.id === game.player1.id) ? game.player2 : game.player1;
-
       const newEmbed = new EmbedBuilder()
         .setTitle('🎮 Tic-Tac-Toe')
         .setDescription(renderBoard(game.board))
@@ -411,7 +433,6 @@ client.login(process.env.TOKEN);
     });
 
     collector.on('end', (_, reason) => {
-      // cleanup
       if (activeGames.has(gameId)) activeGames.delete(gameId);
       if (reason === 'time') {
         message.channel.send('⌛ Game ended due to inactivity.');
@@ -419,10 +440,10 @@ client.login(process.env.TOKEN);
     });
 
     return;
-  }
+  } // end tictactoe block
 
   // ==========================
-  // USER INFO COMMAND
+  // USER INFO
   // ==========================
   if (content.startsWith('+user')) {
     const cooldownLeft = isOnCooldown('+user', message.author.id);
@@ -439,14 +460,14 @@ client.login(process.env.TOKEN);
         { name: 'User ID', value: user.id, inline: true },
         { name: 'Roles', value: `${Math.max(0, member.roles.cache.size - 1)}`, inline: true },
         { name: 'Joined Server', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:F>`, inline: true },
-        { name: 'Account Created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:F>`, inline: true },
+        { name: 'Account Created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:F>`, inline: true }
       )
       .setColor(0x2b2d31);
     return message.reply({ embeds: [embed] });
   }
 
   // ==========================
-  // AFK / DND COMMANDS
+  // AFK / DND
   // ==========================
   if (content.startsWith('+afk')) {
     const cooldownLeft = isOnCooldown('+afk', message.author.id);
@@ -466,57 +487,41 @@ client.login(process.env.TOKEN);
     return message.reply(`⛔ You are now in DND mode: "${msg}"`);
   }
 
-// ==========================
-// POLL COMMAND (UPDATED)
-// ==========================
-if (content.startsWith('+poll')) {
-  const cooldownLeft = isOnCooldown('+poll', message.author.id);
-  if (cooldownLeft) 
-    return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
+  // ==========================
+  // POLL
+  // ==========================
+  if (content.startsWith('+poll')) {
+    const cooldownLeft = isOnCooldown('+poll', message.author.id);
+    if (cooldownLeft) return message.reply(`⏳ Wait ${cooldownLeft}s to create a poll again.`);
 
-  // Parse arguments
-  const args = content.match(/"([^"]+)"|[^\s]+/g);
-  if (!args || args.length < 3)
-    return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
+    const args = content.match(/"([^"]+)"|[^\s]+/g);
+    if (!args || args.length < 3) return message.reply('❌ Usage: `+poll "Question" Option1 Option2 ...`');
 
-  const question = args[0].replace(/"/g, '');
-  const options = args.slice(1);
+    const question = args[0].replace(/"/g, '');
+    const options = args.slice(1);
 
-  if (options.length > pollEmojis.length)
-    return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
+    if (options.length > pollEmojis.length) return message.reply(`⚠️ Max ${pollEmojis.length} options allowed.`);
 
-  // Format description
-  const desc = options
-    .map((opt, i) => `${pollEmojis[i]} — ${opt}`)
-    .join('\n');
+    const desc = options.map((opt, i) => `${pollEmojis[i]} — ${opt}`).join('\n');
 
-  // Create embed with GIF → Question → Options
-  const embed = new EmbedBuilder()
-    .setTitle(`📊 Poll Started!`)
-    .setDescription(`**${question}**\n\n${desc}`)
-    .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif') // GIF first
-    .setColor(0xFFD700)
-    .setFooter({ text: `Poll created by ${message.author.username}` })
-    .setTimestamp();
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Poll Started!`)
+      .setDescription(`**${question}**\n\n${desc}`)
+      .setImage('https://i.kym-cdn.com/photos/images/newsfeed/001/708/012/0ac.gif')
+      .setColor(0xFFD700)
+      .setFooter({ text: `Poll created by ${message.author.username}` })
+      .setTimestamp();
 
-  // Send poll
-  const pollMsg = await message.channel.send({ embeds: [embed] });
-
-  // Add reactions
-  for (let i = 0; i < options.length; i++) {
-    try { 
-      await pollMsg.react(pollEmojis[i]); 
-    } catch (err) {
-      console.log("Reaction Error:", err);
+    const pollMsg = await message.channel.send({ embeds: [embed] });
+    for (let i = 0; i < options.length; i++) {
+      try { await pollMsg.react(pollEmojis[i]); } catch (err) { console.log('Reaction Error:', err); }
     }
+
+    return;
   }
 
-  return;
-}
-
-
   // ==========================
-  // REMOVE AFK/DND ON MESSAGE
+  // Remove AFK/DND when user returns
   // ==========================
   if (userStatus.has(message.author.id)) {
     const prev = userStatus.get(message.author.id);
@@ -524,23 +529,19 @@ if (content.startsWith('+poll')) {
     return message.reply(`👋 Welcome back! You are no longer ${prev.type.toUpperCase()}.`);
   }
 
-  // ==========================
-  // NOTIFY WHEN TAGGING AFK/DND USERS
-  // ==========================
+  // Notify when tagging AFK/DND users
   if (message.mentions.users.size > 0) {
-    for (const user of message.mentions.users.values()) {
-      if (userStatus.has(user.id)) {
-        const s = userStatus.get(user.id);
+    for (const u of message.mentions.users.values()) {
+      if (userStatus.has(u.id)) {
+        const s = userStatus.get(u.id);
         const mins = Math.floor((Date.now() - s.time) / 60000);
-        await message.reply(
-          `${s.type === 'afk' ? '💤' : '⛔'} ${user.username} is ${s.type.toUpperCase()}: "${s.message}" (${mins}m)`
-        );
+        await message.reply(`${s.type === 'afk' ? '💤' : '⛔'} ${u.username} is ${s.type.toUpperCase()}: "${s.message}" (${mins}m)`);
       }
     }
   }
 
   // ==========================
-  // AVATAR COMMAND
+  // Avatar command
   // ==========================
   if (content.startsWith('+av')) {
     const cooldownLeft = isOnCooldown('+av', message.author.id);
@@ -549,11 +550,7 @@ if (content.startsWith('+poll')) {
     const args = content.split(' ').slice(1);
     let user = message.mentions.users.first();
     if (!user && args[0]) {
-      try {
-        user = await client.users.fetch(args[0]);
-      } catch {
-        user = message.author;
-      }
+      try { user = await client.users.fetch(args[0]); } catch { user = message.author; }
     } else if (!user) user = message.author;
 
     const embed = new EmbedBuilder()
@@ -563,87 +560,15 @@ if (content.startsWith('+poll')) {
     return message.reply({ embeds: [embed] });
   }
 
-});
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
-require('dotenv').config();
+}); // end messageCreate
 
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
-});
 
+// =====================
+// Bot ready & login
+// =====================
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}`);
 });
 
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    if (interaction.commandName === 'ping') {
-        await interaction.reply('Pong! 🏓');
-    }
-});
-
-client.login(process.env.TOKEN);
-
-
-// =====================================
-// 🧩 Helper Functions
-// =====================================
-function renderBoard(board) {
-  return `
-${board[0] || '⬜'}${board[1] || '⬜'}${board[2] || '⬜'}
-${board[3] || '⬜'}${board[4] || '⬜'}${board[5] || '⬜'}
-${board[6] || '⬜'}${board[7] || '⬜'}${board[8] || '⬜'}
-  `;
-}
-
-function checkWinner(board) {
-  const wins = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6]
-  ];
-  for (const [a,b,c] of wins)
-    if (board[a] && board[a] === board[b] && board[a] === board[c])
-      return board[a];
-  return null;
-}
-
-function updatePoints(userId, points) {
-  const prev = userPoints.get(userId) || 0;
-  userPoints.set(userId, prev + points);
-}
-
-// TicTacToe: update history + points
-// Win: +3 points, Draw: +1 each, Loss: 0
-function updateHistory(winnerId, loserId, isDraw=false) {
-  if (isDraw) {
-    if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-    if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-    tttStats[winnerId].draws += 1;
-    tttStats[loserId].draws += 1;
-    tttStats[winnerId].games += 1;
-    tttStats[loserId].games += 1;
-    tttStats[winnerId].points += 1;
-    tttStats[loserId].points += 1;
-    return;
-  }
-
-  // normal win/loss
-  if (!tttStats[winnerId]) tttStats[winnerId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-  if (!tttStats[loserId]) tttStats[loserId] = { wins:0, losses:0, draws:0, games:0, points:0 };
-
-  tttStats[winnerId].wins += 1;
-  tttStats[winnerId].games += 1;
-  tttStats[winnerId].points += 3;
-
-  tttStats[loserId].losses += 1;
-  tttStats[loserId].games += 1;
-  // loser gets 0 points
-}
-
-// =====================================
-// 🚀 Start the Bot
-// =====================================
 client.login(process.env.DISCORD_TOKEN)
   .catch(err => console.error('❌ Login failed:', err.message));
