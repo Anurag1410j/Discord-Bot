@@ -1,4 +1,4 @@
- index.js
+// index.js
 require('dotenv').config();
 
 const {
