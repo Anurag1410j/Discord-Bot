@@ -283,7 +283,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
- 
   // =====================================
   // 🎮 Tic-Tac-Toe Command
   // =====================================
@@ -296,20 +295,18 @@ client.on('messageCreate', async (message) => {
     if (opponent.bot) return message.reply('🤖 You can’t play with bots!');
     if (opponent.id === message.author.id) return message.reply('😅 You can’t play against yourself!');
 
-    // create canonical game id where order doesn't matter
     const ids = [message.author.id, opponent.id].sort();
     const gameId = `${ids[0]}-${ids[1]}`;
 
     if (activeGames.has(gameId)) return message.reply('⚠️ There is already an ongoing game between you two.');
 
-    // initialize stats for players if missing
     if (!tttStats[message.author.id]) tttStats[message.author.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
     if (!tttStats[opponent.id]) tttStats[opponent.id] = { wins:0, losses:0, draws:0, games:0, points:0 };
 
     const board = Array(9).fill(null);
     const player1 = message.author;
     const player2 = opponent;
-    const currentPlayer = player1; // X starts
+    const currentPlayer = player1;
 
     activeGames.set(gameId, {
       board,
@@ -327,13 +324,12 @@ client.on('messageCreate', async (message) => {
       .setFooter({ text: `Turn: ${currentPlayer.username}` });
 
     const gameMsg = await message.channel.send({ embeds: [embed] });
-    // store message reference
     const gameData = activeGames.get(gameId);
     gameData.gameMsg = gameMsg;
 
     const emojiNums = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
     for (const e of emojiNums) {
-      try { await gameMsg.react(e); } catch (err) {}
+      try { await gameMsg.react(e); } catch {}
     }
 
     const filter = (reaction, user) =>
@@ -343,26 +339,22 @@ client.on('messageCreate', async (message) => {
     gameData.collector = collector;
 
     collector.on('collect', async (reaction, user) => {
-      // remove extra reactions from same user (to keep UI tidy)
       try { await reaction.users.remove(user.id); } catch {}
 
       const game = activeGames.get(gameId);
       if (!game) return;
 
-      if (user.id !== game.currentPlayer.id) {
-        return; // ignore reaction from not-current player
-      }
+      if (user.id !== game.currentPlayer.id) return;
 
       const index = emojiNums.indexOf(reaction.emoji.name);
       if (index === -1) return;
-      if (game.board[index]) return; // already taken
+      if (game.board[index]) return;
 
       const mark = user.id === game.player1.id ? '❌' : '⭕';
       game.board[index] = mark;
 
       const winnerFound = checkWinner(game.board);
 
-      // WINNER SECTION
       if (winnerFound) {
         collector.stop('win');
 
@@ -388,7 +380,6 @@ client.on('messageCreate', async (message) => {
             `> Games Played: ${winData.games}\n` +
             `> Win Rate: ${winRate}%\n` +
             `> Points: ${winData.points}\n\n` +
-
             `**${loserUser.username}**\n` +
             `> Wins: ${loseData.wins}\n` +
             `> Losses: ${loseData.losses}\n` +
@@ -397,7 +388,6 @@ client.on('messageCreate', async (message) => {
             `> Points: ${loseData.points}`
           )
           .setColor(0xFFD700)
-          .setImage('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXd3YWkwamxicnk4eDl6MGVzbGw2OWEzdW9nOGFwcnJsNHVtczVqZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/chW2JzLfbUI8yWSa9j/giphy.gif')
           .setFooter({ text: 'Tic-Tac-Toe Champion!' })
           .setTimestamp();
 
@@ -405,6 +395,64 @@ client.on('messageCreate', async (message) => {
         return gameMsg.edit({ embeds: [winEmbed] });
       }
 
+      if (game.board.every(cell => cell)) {
+        collector.stop('draw');
+
+        updateHistory(game.player1.id, game.player2.id, true);
+
+        const p1 = tttStats[game.player1.id];
+        const p2 = tttStats[game.player2.id];
+
+        const p1WR = p1.games ? ((p1.wins / p1.games) * 100).toFixed(2) : '0.00';
+        const p2WR = p2.games ? ((p2.wins / p2.games) * 100).toFixed(2) : '0.00';
+
+        const drawEmbed = new EmbedBuilder()
+          .setTitle('🤝 Draw!')
+          .setDescription(
+            `${renderBoard(game.board)}\n\n` +
+            `📊 **Match History Updated!**\n\n` +
+            `**${game.player1.username}**\n` +
+            `> Wins: ${p1.wins}\n` +
+            `> Losses: ${p1.losses}\n` +
+            `> Draws: ${p1.draws}\n` +
+            `> Games Played: ${p1.games}\n` +
+            `> Win Rate: ${p1WR}%\n` +
+            `> Points: ${p1.points}\n\n` +
+            `**${game.player2.username}**\n` +
+            `> Wins: ${p2.wins}\n` +
+            `> Losses: ${p2.losses}\n` +
+            `> Draws: ${p2.draws}\n` +
+            `> Games Played: ${p2.games}\n` +
+            `> Win Rate: ${p2WR}%\n` +
+            `> Points: ${p2.points}`
+          )
+          .setColor(0x7289da)
+          .setTimestamp();
+
+        activeGames.delete(gameId);
+        return gameMsg.edit({ embeds: [drawEmbed] });
+      }
+
+      game.currentPlayer = (game.currentPlayer.id === game.player1.id) ? game.player2 : game.player1;
+
+      const newEmbed = new EmbedBuilder()
+        .setTitle('🎮 Tic-Tac-Toe')
+        .setDescription(renderBoard(game.board))
+        .setColor(0x00ff99)
+        .setFooter({ text: `Turn: ${game.currentPlayer.username}` });
+
+      await gameMsg.edit({ embeds: [newEmbed] });
+    });
+
+    collector.on('end', (_, reason) => {
+      if (activeGames.has(gameId)) activeGames.delete(gameId);
+      if (reason === 'time') {
+        message.channel.send('⌛ Game ended due to inactivity.');
+      }
+    });
+
+    return;
+  }
 
   // ==========================
   // USER INFO COMMAND
